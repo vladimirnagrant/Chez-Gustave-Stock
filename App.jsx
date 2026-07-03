@@ -525,11 +525,12 @@ function UserSelect({ users, onSelect }) {
     return "Employé";
   }
   function roleColor(role) {
+    function roleColor(role, name) {
+    if (name === "Vladimir") return "bg-white border border-stone-200 text-stone-700";
     if (role === "manager") return "bg-stone-800 text-white";
     if (role === "chef") return "bg-amber-700 text-amber-50";
     return "bg-white border border-stone-200 text-stone-700";
   }
-
   return (
     <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center px-6">
       <div className="mb-8 text-center">
@@ -539,7 +540,7 @@ function UserSelect({ users, onSelect }) {
       </div>
       <div className="w-full max-w-sm grid grid-cols-2 gap-3">
         {sorted.map((user) => (
-          <button key={user.id} onClick={() => onSelect(user)} className={`rounded-xl py-4 px-3 text-center font-medium shadow-sm hover:opacity-90 transition-opacity ${roleColor(user.role)}`}>
+          <button key={user.id} onClick={() => onSelect(user)} className={`rounded-xl py-4 px-3 text-center font-medium shadow-sm hover:opacity-90 transition-opacity $roleColor(user.role, user.name)`}>
             <div>{user.name}</div>
             <div className={`text-xs mt-0.5 ${user.role === "manager" ? "text-stone-400" : user.role === "chef" ? "text-amber-200" : "text-stone-400"}`}>{roleLabel(user.role)}</div>
           </button>
