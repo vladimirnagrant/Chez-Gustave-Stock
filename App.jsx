@@ -488,6 +488,47 @@ export default function StockApp() {
     setCatalogue(updated);
     await saveList(CATALOGUE_KEY, updated);
   }
+  // Move an entire category into another category, becoming a subcategory there
+  async function moveCategoryInto(sourceCat, targetCat, newSubName) {
+    if (sourceCat === targetCat) return;
+    const subLabel = (newSubName && newSubName.trim()) || sourceCat;
+    const updated = catalogue.map((c) =>
+      c.category === sourceCat ? { ...c, category: targetCat, subcategory: subLabel } : c
+    );
+    setCatalogue(updated);
+    await saveList(CATALOGUE_KEY, updated);
+  }
+  // Move a subcategory into another category (keeping or renaming the subcategory)
+  async function moveSubcategoryInto(sourceCat, sourceSub, targetCat, newSubName) {
+    const subLabel = (newSubName && newSubName.trim()) || sourceSub;
+    const updated = catalogue.map((c) =>
+      (c.category === sourceCat && c.subcategory === sourceSub)
+        ? { ...c, category: targetCat, subcategory: subLabel }
+        : c
+    );
+    setCatalogue(updated);
+    await saveList(CATALOGUE_KEY, updated);
+  }
+  // Delete an entire category with all its articles
+  async function deleteCategory(cat) {
+    const updated = catalogue.filter((c) => c.category !== cat);
+    setCatalogue(updated);
+    await saveList(CATALOGUE_KEY, updated);
+  }
+  // Delete an entire subcategory with all its articles
+  async function deleteSubcategory(cat, sub) {
+    const updated = catalogue.filter((c) => !(c.category === cat && c.subcategory === sub));
+    setCatalogue(updated);
+    await saveList(CATALOGUE_KEY, updated);
+  }
+  // Remove only the subcategory label - articles move up to parent category (subcategory = "Général")
+  async function dissolveSubcategory(cat, sub) {
+    const updated = catalogue.map((c) =>
+      (c.category === cat && c.subcategory === sub) ? { ...c, subcategory: "Général" } : c
+    );
+    setCatalogue(updated);
+    await saveList(CATALOGUE_KEY, updated);
+  }
 
   async function addUser(name, role) {
     const newUser = { id: uid(), name: name.trim(), role };
@@ -600,6 +641,11 @@ export default function StockApp() {
           onRemove={removeCatalogueItem}
           onRenameCategory={renameCategory}
           onRenameSubcategory={renameSubcategory}
+          onMoveCategoryInto={moveCategoryInto}
+          onMoveSubcategoryInto={moveSubcategoryInto}
+          onDeleteCategory={deleteCategory}
+          onDeleteSubcategory={deleteSubcategory}
+          onDissolveSubcategory={dissolveSubcategory}
         />
       ) : view === "users" ? (
         <UserManager
@@ -2726,7 +2772,7 @@ function HistoryByDate({ history, catalogue, employees, onToggleReceived, onUpda
   );
 }
 
-function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCategory, onRenameSubcategory }) {
+function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCategory, onRenameSubcategory, onMoveCategoryInto, onMoveSubcategoryInto, onDeleteCategory, onDeleteSubcategory, onDissolveSubcategory }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
@@ -2745,6 +2791,14 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
   const [emptyCatGroupe, setEmptyCatGroupe] = useState("Alimentaire");
   const [emptyCatName, setEmptyCatName] = useState("");
   const [emptyCatSub, setEmptyCatSub] = useState("");
+  // Moving category/subcategory
+  const [movingCat, setMovingCat] = useState(null); // { source }
+  const [movingSub, setMovingSub] = useState(null); // { sourceCat, sourceSub }
+  const [moveTarget, setMoveTarget] = useState("");
+  const [moveNewSub, setMoveNewSub] = useState("");
+  // Deleting category/subcategory
+  const [confirmDeleteCat, setConfirmDeleteCat] = useState(null); // cat name
+  const [confirmDeleteSub, setConfirmDeleteSub] = useState(null); // { cat, sub }
   const tree = groupCatalogue(catalogue);
 
   function createEmptyCategory() {
@@ -2806,6 +2860,48 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
             setConfirmDelete(null);
           }}
         />
+      )}
+      {confirmDeleteCat && (
+        <ConfirmDialog
+          title="Supprimer toute la catégorie ?"
+          message={`La catégorie "${confirmDeleteCat}" et TOUS ses articles seront supprimés définitivement.`}
+          onCancel={() => setConfirmDeleteCat(null)}
+          onConfirm={() => {
+            onDeleteCategory(confirmDeleteCat);
+            setConfirmDeleteCat(null);
+          }}
+        />
+      )}
+      {confirmDeleteSub && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-6">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h3 className="font-semibold text-stone-800 mb-2">Sous-catégorie "{confirmDeleteSub.sub}"</h3>
+            <p className="text-sm text-stone-500 mb-5">Que veux-tu faire ?</p>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  onDissolveSubcategory(confirmDeleteSub.cat, confirmDeleteSub.sub);
+                  setConfirmDeleteSub(null);
+                }}
+                className="w-full bg-amber-600 text-white rounded-xl py-3 px-4 text-sm font-medium hover:bg-amber-700 transition-colors text-left"
+              >
+                📤 Enlever seulement l'appellation
+                <div className="text-xs font-normal text-amber-100 mt-0.5">Les articles remontent dans "{confirmDeleteSub.cat}"</div>
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteSubcategory(confirmDeleteSub.cat, confirmDeleteSub.sub);
+                  setConfirmDeleteSub(null);
+                }}
+                className="w-full bg-red-500 text-white rounded-xl py-3 px-4 text-sm font-medium hover:bg-red-600 transition-colors text-left"
+              >
+                🗑️ Tout supprimer
+                <div className="text-xs font-normal text-red-100 mt-0.5">La sous-catégorie ET ses articles</div>
+              </button>
+              <button onClick={() => setConfirmDeleteSub(null)} className="w-full text-stone-400 text-sm py-2">Annuler</button>
+            </div>
+          </div>
+        </div>
       )}
       <div className="bg-white border border-stone-200 rounded-xl p-4 mb-6">
         <h3 className="text-sm font-medium text-stone-700 mb-3">Ajouter un article</h3>
@@ -2976,12 +3072,57 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
                 <button onClick={() => setEditingCat(null)} className="text-stone-400 text-sm">✕</button>
               </div>
             ) : (
-              <button
-                onClick={() => setEditingCat({ oldName: cat, newName: cat })}
-                className="text-sm font-medium text-stone-800 mb-1 flex items-center gap-1 hover:text-amber-700"
-              >
-                {cat} <span className="text-stone-300 text-xs">✏️</span>
-              </button>
+              <div className="flex items-center gap-2 mb-1">
+                <button
+                  onClick={() => setEditingCat({ oldName: cat, newName: cat })}
+                  className="text-sm font-medium text-stone-800 flex items-center gap-1 hover:text-amber-700"
+                >
+                  {cat} <span className="text-stone-300 text-xs">✏️</span>
+                </button>
+                <button
+                  onClick={() => { setMovingCat({ source: cat }); setMoveTarget(""); setMoveNewSub(""); }}
+                  className="text-xs text-stone-400 hover:text-amber-600 border border-stone-200 rounded px-1.5 py-0.5"
+                  title="Déplacer cette catégorie dans une autre"
+                >
+                  📦→
+                </button>
+                <button
+                  onClick={() => setConfirmDeleteCat(cat)}
+                  className="text-xs text-red-400 hover:text-red-600 border border-red-100 rounded px-1.5 py-0.5"
+                  title="Supprimer toute la catégorie"
+                >
+                  🗑️
+                </button>
+              </div>
+            )}
+            {movingCat?.source === cat && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-2 space-y-2">
+                <p className="text-xs text-stone-600">Déplacer <b>{cat}</b> dans :</p>
+                <select
+                  value={moveTarget}
+                  onChange={(e) => setMoveTarget(e.target.value)}
+                  className="w-full border border-amber-300 rounded-lg px-2 py-1 text-xs bg-white"
+                >
+                  <option value="">Choisir la catégorie cible…</option>
+                  {Object.keys(tree).filter(c => c !== cat).sort().map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <input
+                  value={moveNewSub}
+                  onChange={(e) => setMoveNewSub(e.target.value)}
+                  placeholder={`Nom sous-catégorie (défaut: ${cat})`}
+                  className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs"
+                />
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => { if (moveTarget) { onMoveCategoryInto(cat, moveTarget, moveNewSub); setMovingCat(null); } }}
+                    disabled={!moveTarget}
+                    className="bg-emerald-600 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-40"
+                  >
+                    ✓ Déplacer
+                  </button>
+                  <button onClick={() => setMovingCat(null)} className="text-stone-400 text-xs px-2">Annuler</button>
+                </div>
+              </div>
             )}
             {Object.entries(subs).map(([sub, items]) => (
               <div key={sub} className="mb-2">
@@ -2997,12 +3138,57 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
                     <button onClick={() => setEditingSub(null)} className="text-stone-400 text-xs">✕</button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => setEditingSub({ category: cat, oldSub: sub, newSub: sub })}
-                    className="text-xs text-stone-400 mb-1 pl-2 flex items-center gap-1 hover:text-amber-600"
-                  >
-                    {sub} <span className="text-stone-300">✏️</span>
-                  </button>
+                  <div className="flex items-center gap-2 mb-1 pl-2">
+                    <button
+                      onClick={() => setEditingSub({ category: cat, oldSub: sub, newSub: sub })}
+                      className="text-xs text-stone-400 flex items-center gap-1 hover:text-amber-600"
+                    >
+                      {sub} <span className="text-stone-300">✏️</span>
+                    </button>
+                    <button
+                      onClick={() => { setMovingSub({ sourceCat: cat, sourceSub: sub }); setMoveTarget(""); setMoveNewSub(""); }}
+                      className="text-[10px] text-stone-400 hover:text-amber-600 border border-stone-200 rounded px-1 py-0.5"
+                      title="Déplacer cette sous-catégorie dans une autre catégorie"
+                    >
+                      📦→
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteSub({ cat, sub })}
+                      className="text-[10px] text-red-400 hover:text-red-600 border border-red-100 rounded px-1 py-0.5"
+                      title="Supprimer toute la sous-catégorie"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                )}
+                {movingSub?.sourceCat === cat && movingSub?.sourceSub === sub && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-2 ml-2 space-y-2">
+                    <p className="text-xs text-stone-600">Déplacer <b>{sub}</b> dans :</p>
+                    <select
+                      value={moveTarget}
+                      onChange={(e) => setMoveTarget(e.target.value)}
+                      className="w-full border border-amber-300 rounded-lg px-2 py-1 text-xs bg-white"
+                    >
+                      <option value="">Choisir la catégorie cible…</option>
+                      {Object.keys(tree).filter(c => c !== cat).sort().map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <input
+                      value={moveNewSub}
+                      onChange={(e) => setMoveNewSub(e.target.value)}
+                      placeholder={`Nom sous-catégorie (défaut: ${sub})`}
+                      className="w-full border border-stone-200 rounded-lg px-2 py-1 text-xs"
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={() => { if (moveTarget) { onMoveSubcategoryInto(cat, sub, moveTarget, moveNewSub); setMovingSub(null); } }}
+                        disabled={!moveTarget}
+                        className="bg-emerald-600 text-white rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-40"
+                      >
+                        ✓ Déplacer
+                      </button>
+                      <button onClick={() => setMovingSub(null)} className="text-stone-400 text-xs px-2">Annuler</button>
+                    </div>
+                  </div>
                 )}
                 <div className="space-y-1">
                   {items.map((item) => (
