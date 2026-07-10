@@ -795,6 +795,14 @@ function groupCatalogue(catalogue) {
   const tree = {};
   for (const item of (catalogue || [])) {
     if (!item) continue;
+    if (item._placeholder) {
+      // Ensure category/subcategory exist in tree but don't add the placeholder item
+      const cat = item.category || "Sans catégorie";
+      const sub = item.subcategory || "Général";
+      if (!tree[cat]) tree[cat] = {};
+      if (!tree[cat][sub]) tree[cat][sub] = [];
+      continue;
+    }
     const cat = item.category || "Sans catégorie";
     const sub = item.subcategory || "Général";
     if (!tree[cat]) tree[cat] = {};
@@ -2732,7 +2740,30 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
   const [editingItem, setEditingItem] = useState(null); // { id, code, name }
   const [editingCat, setEditingCat] = useState(null); // { oldName, newName }
   const [editingSub, setEditingSub] = useState(null); // { category, oldSub, newSub }
+  // Empty category creation
+  const [showNewCatBox, setShowNewCatBox] = useState(false);
+  const [emptyCatGroupe, setEmptyCatGroupe] = useState("Alimentaire");
+  const [emptyCatName, setEmptyCatName] = useState("");
+  const [emptyCatSub, setEmptyCatSub] = useState("");
   const tree = groupCatalogue(catalogue);
+
+  function createEmptyCategory() {
+    if (!emptyCatName.trim()) return;
+    // Create category via a placeholder item (hidden from ordering views)
+    onAdd({
+      code: "",
+      name: "__placeholder__",
+      groupe: emptyCatGroupe,
+      category: emptyCatName.trim(),
+      subcategory: emptyCatSub.trim() || "Général",
+      minStock: 0,
+      minUnit: "pièce",
+      _placeholder: true,
+    });
+    setEmptyCatName("");
+    setEmptyCatSub("");
+    setShowNewCatBox(false);
+  }
 
   const existingCategories = Object.keys(tree).sort();
   const finalCategory = category === "__new__" ? newCategory.trim() : category;
@@ -2885,6 +2916,47 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl p-4 mb-6">
+        {!showNewCatBox ? (
+          <button
+            onClick={() => setShowNewCatBox(true)}
+            className="w-full text-sm font-medium text-amber-700 border-2 border-dashed border-amber-300 rounded-lg py-3 hover:bg-amber-50 transition-colors"
+          >
+            📁 Créer une catégorie vide
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-stone-700">Nouvelle catégorie vide</h3>
+            <p className="text-xs text-stone-400">Créez la catégorie puis déplacez-y des articles existants.</p>
+            <select
+              value={emptyCatGroupe}
+              onChange={(e) => setEmptyCatGroupe(e.target.value)}
+              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="Alimentaire">🧃 Alimentaire</option>
+              <option value="Non Alimentaire">🥡 Non Alimentaire</option>
+            </select>
+            <input
+              value={emptyCatName}
+              onChange={(e) => setEmptyCatName(e.target.value)}
+              placeholder="Nom de la catégorie"
+              className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm"
+              autoFocus
+            />
+            <input
+              value={emptyCatSub}
+              onChange={(e) => setEmptyCatSub(e.target.value)}
+              placeholder="Sous-catégorie (optionnel)"
+              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={createEmptyCategory} className="bg-emerald-600 text-white rounded-lg px-4 py-2 text-sm font-medium">✓ Enregistrer</button>
+              <button onClick={() => { setShowNewCatBox(false); setEmptyCatName(""); setEmptyCatSub(""); }} className="text-stone-400 text-sm px-2">Annuler</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <h3 className="text-xs uppercase tracking-wide text-stone-400 mb-2">Catalogue actuel</h3>
