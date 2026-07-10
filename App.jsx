@@ -2727,6 +2727,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
   const [newSubcategory, setNewSubcategory] = useState("");
   const [minStock, setMinStock] = useState("");
   const [minUnit, setMinUnit] = useState("pièce");
+  const [groupe, setGroupe] = useState("Alimentaire");
   const [confirmDelete, setConfirmDelete] = useState(null); // { id, label }
   const [editingItem, setEditingItem] = useState(null); // { id, code, name }
   const [editingCat, setEditingCat] = useState(null); // { oldName, newName }
@@ -2743,6 +2744,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
     onAdd({
       code: code.trim(),
       name: name.trim(),
+      groupe: groupe,
       category: finalCategory,
       subcategory: finalSubcategory || "Général",
       minStock: minStock ? Number(minStock) : 0,
@@ -2790,6 +2792,17 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
               placeholder="Nom de l'article"
               className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm"
             />
+          </div>
+
+          <div className="flex gap-2">
+            <select
+              value={groupe}
+              onChange={(e) => setGroupe(e.target.value)}
+              className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="Alimentaire">🧃 Alimentaire</option>
+              <option value="Non Alimentaire">🥡 Non Alimentaire</option>
+            </select>
           </div>
 
           <div className="flex gap-2">
