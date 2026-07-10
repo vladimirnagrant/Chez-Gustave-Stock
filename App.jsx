@@ -476,6 +476,18 @@ export default function StockApp() {
     setCatalogue(updated);
     await saveList(CATALOGUE_KEY, updated);
   }
+  async function renameCategory(oldName, newName) {
+    if (!newName.trim() || oldName === newName) return;
+    const updated = catalogue.map((c) => c.category === oldName ? { ...c, category: newName.trim() } : c);
+    setCatalogue(updated);
+    await saveList(CATALOGUE_KEY, updated);
+  }
+  async function renameSubcategory(category, oldSub, newSub) {
+    if (!newSub.trim() || oldSub === newSub) return;
+    const updated = catalogue.map((c) => (c.category === category && c.subcategory === oldSub) ? { ...c, subcategory: newSub.trim() } : c);
+    setCatalogue(updated);
+    await saveList(CATALOGUE_KEY, updated);
+  }
 
   async function addUser(name, role) {
     const newUser = { id: uid(), name: name.trim(), role };
@@ -586,6 +598,8 @@ export default function StockApp() {
           onAdd={addCatalogueItem}
           onUpdate={updateCatalogueItem}
           onRemove={removeCatalogueItem}
+          onRenameCategory={renameCategory}
+          onRenameSubcategory={renameSubcategory}
         />
       ) : view === "users" ? (
         <UserManager
@@ -2704,7 +2718,7 @@ function HistoryByDate({ history, catalogue, employees, onToggleReceived, onUpda
   );
 }
 
-function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove }) {
+function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCategory, onRenameSubcategory }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
@@ -2714,6 +2728,9 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove }) {
   const [minStock, setMinStock] = useState("");
   const [minUnit, setMinUnit] = useState("pièce");
   const [confirmDelete, setConfirmDelete] = useState(null); // { id, label }
+  const [editingItem, setEditingItem] = useState(null); // { id, code, name }
+  const [editingCat, setEditingCat] = useState(null); // { oldName, newName }
+  const [editingSub, setEditingSub] = useState(null); // { category, oldSub, newSub }
   const tree = groupCatalogue(catalogue);
 
   const existingCategories = Object.keys(tree).sort();
@@ -2858,51 +2875,174 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove }) {
       </div>
 
       <h3 className="text-xs uppercase tracking-wide text-stone-400 mb-2">Catalogue actuel</h3>
+      <p className="text-xs text-stone-400 mb-3">✏️ Touchez un nom pour le modifier</p>
       <div className="space-y-4">
         {Object.entries(tree).map(([cat, subs]) => (
           <div key={cat}>
-            <div className="text-sm font-medium text-stone-800 mb-1">{cat}</div>
+            {editingCat?.oldName === cat ? (
+              <div className="flex items-center gap-2 mb-1">
+                <input
+                  value={editingCat.newName}
+                  onChange={(e) => setEditingCat({ ...editingCat, newName: e.target.value })}
+                  className="flex-1 border border-amber-300 rounded-lg px-2 py-1 text-sm font-medium"
+                  autoFocus
+                />
+                <button onClick={() => { onRenameCategory(cat, editingCat.newName); setEditingCat(null); }} className="text-emerald-600 text-sm font-medium">✓</button>
+                <button onClick={() => setEditingCat(null)} className="text-stone-400 text-sm">✕</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setEditingCat({ oldName: cat, newName: cat })}
+                className="text-sm font-medium text-stone-800 mb-1 flex items-center gap-1 hover:text-amber-700"
+              >
+                {cat} <span className="text-stone-300 text-xs">✏️</span>
+              </button>
+            )}
             {Object.entries(subs).map(([sub, items]) => (
               <div key={sub} className="mb-2">
-                <div className="text-xs text-stone-400 mb-1 pl-2">{sub}</div>
+                {editingSub?.category === cat && editingSub?.oldSub === sub ? (
+                  <div className="flex items-center gap-2 mb-1 pl-2">
+                    <input
+                      value={editingSub.newSub}
+                      onChange={(e) => setEditingSub({ ...editingSub, newSub: e.target.value })}
+                      className="flex-1 border border-amber-300 rounded-lg px-2 py-1 text-xs"
+                      autoFocus
+                    />
+                    <button onClick={() => { onRenameSubcategory(cat, sub, editingSub.newSub); setEditingSub(null); }} className="text-emerald-600 text-xs">✓</button>
+                    <button onClick={() => setEditingSub(null)} className="text-stone-400 text-xs">✕</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setEditingSub({ category: cat, oldSub: sub, newSub: sub })}
+                    className="text-xs text-stone-400 mb-1 pl-2 flex items-center gap-1 hover:text-amber-600"
+                  >
+                    {sub} <span className="text-stone-300">✏️</span>
+                  </button>
+                )}
                 <div className="space-y-1">
                   {items.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-white border border-stone-200 rounded-lg px-3 py-2 flex items-center justify-between text-sm"
+                      className="bg-white border border-stone-200 rounded-lg px-3 py-2 text-sm"
                     >
-                      <span className="text-stone-700">
-                        {item.code ? `${item.code} · ` : ""}{item.name}
-                      </span>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1 text-xs text-stone-400">
-                          Min
-                          <input
-                            type="number"
-                            min="0"
-                            value={item.minStock}
-                            onChange={(e) => onUpdate(item.id, { minStock: Number(e.target.value) })}
-                            className="w-12 border border-stone-200 rounded px-1 py-0.5 text-center"
-                          />
-                          <select
-                            value={item.minUnit || "pièce"}
-                            onChange={(e) => onUpdate(item.id, { minUnit: e.target.value })}
-                            className="border border-stone-200 rounded px-1 py-0.5 text-xs bg-white"
-                          >
-                            <option value="pièce">Pièce</option>
-                            <option value="btl">Btl</option>
-                            <option value="kg">Kg</option>
-                            <option value="litre">Litre</option>
-                            <option value="carton">Carton</option>
-                          </select>
+                      {editingItem?.id === item.id ? (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              value={editingItem.code}
+                              onChange={(e) => setEditingItem({ ...editingItem, code: e.target.value })}
+                              placeholder="Code"
+                              className="w-28 border border-amber-300 rounded px-2 py-1 text-xs"
+                            />
+                            <input
+                              value={editingItem.name}
+                              onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                              placeholder="Nom"
+                              className="flex-1 border border-amber-300 rounded px-2 py-1 text-sm"
+                              autoFocus
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-stone-400 uppercase">Groupe</label>
+                            <select
+                              value={editingItem.groupe}
+                              onChange={(e) => setEditingItem({ ...editingItem, groupe: e.target.value })}
+                              className="w-full border border-amber-300 rounded px-2 py-1 text-xs bg-white"
+                            >
+                              <option value="Alimentaire">🧃 Alimentaire</option>
+                              <option value="Non Alimentaire">🥡 Non Alimentaire</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-stone-400 uppercase">Catégorie</label>
+                            <select
+                              value={editingItem.catMode === "new" ? "__new__" : editingItem.category}
+                              onChange={(e) => {
+                                if (e.target.value === "__new__") setEditingItem({ ...editingItem, catMode: "new", category: "" });
+                                else setEditingItem({ ...editingItem, catMode: "existing", category: e.target.value });
+                              }}
+                              className="w-full border border-amber-300 rounded px-2 py-1 text-xs bg-white"
+                            >
+                              {existingCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                              <option value="__new__">+ Nouvelle catégorie</option>
+                            </select>
+                            {editingItem.catMode === "new" && (
+                              <input
+                                value={editingItem.category}
+                                onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                                placeholder="Nom nouvelle catégorie"
+                                className="w-full border border-amber-300 rounded px-2 py-1 text-xs mt-1"
+                              />
+                            )}
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-stone-400 uppercase">Sous-catégorie</label>
+                            <input
+                              value={editingItem.subcategory}
+                              onChange={(e) => setEditingItem({ ...editingItem, subcategory: e.target.value })}
+                              placeholder="Sous-catégorie"
+                              className="w-full border border-amber-300 rounded px-2 py-1 text-xs"
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => {
+                                onUpdate(item.id, {
+                                  code: editingItem.code.trim(),
+                                  name: editingItem.name.trim(),
+                                  groupe: editingItem.groupe,
+                                  category: editingItem.category.trim() || item.category,
+                                  subcategory: editingItem.subcategory.trim() || "Général",
+                                });
+                                setEditingItem(null);
+                              }}
+                              className="bg-emerald-600 text-white rounded-lg px-3 py-1 text-xs font-medium"
+                            >
+                              ✓ Enregistrer
+                            </button>
+                            <button onClick={() => setEditingItem(null)} className="text-stone-400 text-xs px-2">Annuler</button>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => setConfirmDelete({ id: item.id, label: item.name })}
-                          className="text-stone-300 hover:text-red-500"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <button
+                            onClick={() => setEditingItem({ id: item.id, code: item.code || "", name: item.name, groupe: item.groupe || "Alimentaire", category: item.category, subcategory: item.subcategory || "Général", catMode: "existing" })}
+                            className="text-stone-700 text-left flex-1 flex items-center gap-1 hover:text-amber-700"
+                          >
+                            <span>{item.code ? `${item.code} · ` : ""}{item.name}</span>
+                            <span className="text-stone-300 text-xs">✏️</span>
+                          </button>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 text-xs text-stone-400">
+                              Min
+                              <input
+                                type="number"
+                                min="0"
+                                value={item.minStock}
+                                onChange={(e) => onUpdate(item.id, { minStock: Number(e.target.value) })}
+                                className="w-12 border border-stone-200 rounded px-1 py-0.5 text-center"
+                              />
+                              <select
+                                value={item.minUnit || "pièce"}
+                                onChange={(e) => onUpdate(item.id, { minUnit: e.target.value })}
+                                className="border border-stone-200 rounded px-1 py-0.5 text-xs bg-white"
+                              >
+                                <option value="pièce">Pièce</option>
+                                <option value="btl">Btl</option>
+                                <option value="kg">Kg</option>
+                                <option value="litre">Litre</option>
+                                <option value="carton">Carton</option>
+                              </select>
+                            </div>
+                            <button
+                              onClick={() => setConfirmDelete({ id: item.id, label: item.name })}
+                              className="text-stone-300 hover:text-red-500"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
