@@ -2799,7 +2799,10 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
   // Deleting category/subcategory
   const [confirmDeleteCat, setConfirmDeleteCat] = useState(null); // cat name
   const [confirmDeleteSub, setConfirmDeleteSub] = useState(null); // { cat, sub }
-  const tree = groupCatalogue(catalogue);
+  // Filter catalogue view by groupe
+  const [viewGroupe, setViewGroupe] = useState("Alimentaire");
+  const visibleCatalogue = catalogue.filter((c) => (c?.groupe || "Alimentaire") === viewGroupe);
+  const tree = groupCatalogue(visibleCatalogue);
 
   function createEmptyCategory() {
     if (!emptyCatName.trim()) return;
@@ -2820,6 +2823,10 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
   }
 
   const existingCategories = Object.keys(tree).sort();
+  // Categories available in the add form, based on the groupe selected there
+  const addFormCategories = Object.keys(
+    groupCatalogue(catalogue.filter((c) => (c?.groupe || "Alimentaire") === groupe))
+  ).sort();
   const finalCategory = category === "__new__" ? newCategory.trim() : category;
   const subcategoriesForCategory = category && category !== "__new__" ? Object.keys(tree[category] || {}).sort() : [];
   const finalSubcategory = subcategory === "__new__" ? newSubcategory.trim() : subcategory;
@@ -2943,7 +2950,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
               className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm bg-white"
             >
               <option value="">Catégorie…</option>
-              {existingCategories.map((c) => (
+              {addFormCategories.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
@@ -3056,6 +3063,28 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
       </div>
 
       <h3 className="text-xs uppercase tracking-wide text-stone-400 mb-2">Catalogue actuel</h3>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <button
+          onClick={() => setViewGroupe("Alimentaire")}
+          className={`rounded-xl py-2.5 text-sm font-medium transition-all ${
+            viewGroupe === "Alimentaire"
+              ? "bg-stone-800 text-white shadow-md"
+              : "bg-white text-stone-500 border border-stone-200"
+          }`}
+        >
+          🧃 Alimentaires
+        </button>
+        <button
+          onClick={() => setViewGroupe("Non Alimentaire")}
+          className={`rounded-xl py-2.5 text-sm font-medium transition-all ${
+            viewGroupe === "Non Alimentaire"
+              ? "bg-amber-600 text-white shadow-md"
+              : "bg-white text-amber-600 border border-amber-200"
+          }`}
+        >
+          🥡 Non Alimentaires
+        </button>
+      </div>
       <p className="text-xs text-stone-400 mb-3">✏️ Touchez un nom pour le modifier</p>
       <div className="space-y-4">
         {Object.entries(tree).map(([cat, subs]) => (
@@ -3234,7 +3263,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
                               }}
                               className="w-full border border-amber-300 rounded px-2 py-1 text-xs bg-white"
                             >
-                              {existingCategories.map((c) => <option key={c} value={c}>{c}</option>)}
+                              {Object.keys(groupCatalogue(catalogue.filter((c) => (c?.groupe || "Alimentaire") === editingItem.groupe))).sort().map((c) => <option key={c} value={c}>{c}</option>)}
                               <option value="__new__">+ Nouvelle catégorie</option>
                             </select>
                             {editingItem.catMode === "new" && (
