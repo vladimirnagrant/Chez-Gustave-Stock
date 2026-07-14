@@ -279,7 +279,7 @@ export default function StockApp() {
       ]);
       setUsers(u);
       setPins(p);
-      setCatalogue(c);
+      setCatalogue((c || []).map((it) => it ? { ...it, subcategory: normalizeSub(it.subcategory) } : it));
       setRequests(r);
       setHistory(h);
       setCashRequests(m);
@@ -484,7 +484,8 @@ export default function StockApp() {
   }
   async function renameSubcategory(category, oldSub, newSub) {
     if (!newSub.trim() || oldSub === newSub) return;
-    const updated = catalogue.map((c) => (c.category === category && c.subcategory === oldSub) ? { ...c, subcategory: newSub.trim() } : c);
+    const target = normalizeSub(oldSub);
+    const updated = catalogue.map((c) => (c.category === category && normalizeSub(c.subcategory) === target) ? { ...c, subcategory: newSub.trim() } : c);
     setCatalogue(updated);
     await saveList(CATALOGUE_KEY, updated);
   }
@@ -500,9 +501,10 @@ export default function StockApp() {
   }
   // Move a subcategory into another category (keeping or renaming the subcategory)
   async function moveSubcategoryInto(sourceCat, sourceSub, targetCat, newSubName) {
+    const target = normalizeSub(sourceSub);
     const subLabel = (newSubName && newSubName.trim()) || sourceSub;
     const updated = catalogue.map((c) =>
-      (c.category === sourceCat && c.subcategory === sourceSub)
+      (c.category === sourceCat && normalizeSub(c.subcategory) === target)
         ? { ...c, category: targetCat, subcategory: subLabel }
         : c
     );
@@ -517,14 +519,16 @@ export default function StockApp() {
   }
   // Delete an entire subcategory with all its articles
   async function deleteSubcategory(cat, sub) {
-    const updated = catalogue.filter((c) => !(c.category === cat && c.subcategory === sub));
+    const target = normalizeSub(sub);
+    const updated = catalogue.filter((c) => !(c.category === cat && normalizeSub(c.subcategory) === target));
     setCatalogue(updated);
     await saveList(CATALOGUE_KEY, updated);
   }
-  // Remove only the subcategory label - articles move up to parent category (subcategory = "Général")
+  // Remove only the subcategory label - articles move up to parent category (no subcategory)
   async function dissolveSubcategory(cat, sub) {
+    const target = normalizeSub(sub);
     const updated = catalogue.map((c) =>
-      (c.category === cat && c.subcategory === sub) ? { ...c, subcategory: "Général" } : c
+      (c.category === cat && normalizeSub(c.subcategory) === target) ? { ...c, subcategory: "" } : c
     );
     setCatalogue(updated);
     await saveList(CATALOGUE_KEY, updated);
@@ -837,6 +841,13 @@ function articleNameClass(item) {
   return groupe === "Non Alimentaire" ? "font-bold text-amber-600" : "font-bold text-stone-900";
 }
 
+// A subcategory is "generic" when it has no real name (empty) or is the legacy auto label
+function normalizeSub(sub) {
+  const s = (sub || "").trim();
+  if (!s || s.toLowerCase() === "général" || s.toLowerCase() === "general") return "";
+  return s;
+}
+
 function groupCatalogue(catalogue) {
   const tree = {};
   for (const item of (catalogue || [])) {
@@ -844,13 +855,13 @@ function groupCatalogue(catalogue) {
     if (item._placeholder) {
       // Ensure category/subcategory exist in tree but don't add the placeholder item
       const cat = item.category || "Sans catégorie";
-      const sub = item.subcategory || "Général";
+      const sub = normalizeSub(item.subcategory);
       if (!tree[cat]) tree[cat] = {};
       if (!tree[cat][sub]) tree[cat][sub] = [];
       continue;
     }
     const cat = item.category || "Sans catégorie";
-    const sub = item.subcategory || "Général";
+    const sub = normalizeSub(item.subcategory);
     if (!tree[cat]) tree[cat] = {};
     if (!tree[cat][sub]) tree[cat][sub] = [];
     tree[cat][sub].push(item);
@@ -1157,17 +1168,19 @@ function EmployeeView({ catalogue, onAddRequest, allRequests, history, employees
               <div className="px-2 pb-2">
                 {Object.entries(subs).map(([sub, items]) => (
                   <div key={sub} className="mb-1">
-                    <button
-                      onClick={() => setOpenSub(openSub === sub ? null : sub)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-stone-400"
-                    >
-                      {sub}
-                      <ChevronDown
-                        size={12}
-                        className={`transition-transform ${openSub === sub ? "rotate-180" : ""}`}
-                      />
-                    </button>
-                    {openSub === sub && (
+                    {sub ? (
+                      <button
+                        onClick={() => setOpenSub(openSub === sub ? null : sub)}
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-stone-400"
+                      >
+                        {sub}
+                        <ChevronDown
+                          size={12}
+                          className={`transition-transform ${openSub === sub ? "rotate-180" : ""}`}
+                        />
+                      </button>
+                    ) : null}
+                    {(!sub || openSub === sub) && (
                       <div className="flex flex-col gap-2 px-3 pb-2">
                         {items.map((item) => (
                           <div key={item.id}>
@@ -2070,11 +2083,13 @@ function ChefCommandeView({ catalogue, allRequests, onAddRequest, currentEmploye
                   <div className="px-2 pb-2">
                     {Object.entries(subs).map(([sub, items]) => (
                       <div key={sub} className="mb-1">
-                        <button onClick={() => setOpenSub(openSub === sub ? null : sub)} className="w-full flex items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-stone-400">
-                          {sub}
-                          <ChevronDown size={12} className={`transition-transform ${openSub === sub ? "rotate-180" : ""}`} />
-                        </button>
-                        {openSub === sub && (
+                        {sub ? (
+                          <button onClick={() => setOpenSub(openSub === sub ? null : sub)} className="w-full flex items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-stone-400">
+                            {sub}
+                            <ChevronDown size={12} className={`transition-transform ${openSub === sub ? "rotate-180" : ""}`} />
+                          </button>
+                        ) : null}
+                        {(!sub || openSub === sub) && (
                           <div className="flex flex-col gap-2 px-3 pb-2">
                             {items.map((item) => (
                               <div key={item.id}>
@@ -2812,7 +2827,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
       name: "__placeholder__",
       groupe: emptyCatGroupe,
       category: emptyCatName.trim(),
-      subcategory: emptyCatSub.trim() || "Général",
+      subcategory: emptyCatSub.trim(),
       minStock: 0,
       minUnit: "pièce",
       _placeholder: true,
@@ -2838,7 +2853,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
       name: name.trim(),
       groupe: groupe,
       category: finalCategory,
-      subcategory: finalSubcategory || "Général",
+      subcategory: finalSubcategory || "",
       minStock: minStock ? Number(minStock) : 0,
       minUnit: minUnit,
     });
@@ -2975,8 +2990,8 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
               disabled={!category}
               className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm bg-white disabled:bg-stone-100 disabled:text-stone-400"
             >
-              <option value="">Sous-catégorie…</option>
-              {subcategoriesForCategory.map((s) => (
+              <option value="">Aucune sous-catégorie</option>
+              {subcategoriesForCategory.filter(Boolean).map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -3051,7 +3066,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
             <input
               value={emptyCatSub}
               onChange={(e) => setEmptyCatSub(e.target.value)}
-              placeholder="Sous-catégorie (optionnel)"
+              placeholder="Sous-catégorie (laisser vide si aucune)"
               className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
             />
             <div className="flex gap-2 justify-end">
@@ -3155,7 +3170,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
             )}
             {Object.entries(subs).map(([sub, items]) => (
               <div key={sub} className="mb-2">
-                {editingSub?.category === cat && editingSub?.oldSub === sub ? (
+                {!sub ? null : editingSub?.category === cat && editingSub?.oldSub === sub ? (
                   <div className="flex items-center gap-2 mb-1 pl-2">
                     <input
                       value={editingSub.newSub}
@@ -3280,7 +3295,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
                             <input
                               value={editingItem.subcategory}
                               onChange={(e) => setEditingItem({ ...editingItem, subcategory: e.target.value })}
-                              placeholder="Sous-catégorie"
+                              placeholder="Sous-catégorie (vide = aucune)"
                               className="w-full border border-amber-300 rounded px-2 py-1 text-xs"
                             />
                           </div>
@@ -3292,7 +3307,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
                                   name: editingItem.name.trim(),
                                   groupe: editingItem.groupe,
                                   category: editingItem.category.trim() || item.category,
-                                  subcategory: editingItem.subcategory.trim() || "Général",
+                                  subcategory: editingItem.subcategory.trim(),
                                 });
                                 setEditingItem(null);
                               }}
@@ -3306,7 +3321,7 @@ function CatalogueManager({ catalogue, onAdd, onUpdate, onRemove, onRenameCatego
                       ) : (
                         <div className="flex items-center justify-between">
                           <button
-                            onClick={() => setEditingItem({ id: item.id, code: item.code || "", name: item.name, groupe: item.groupe || "Alimentaire", category: item.category, subcategory: item.subcategory || "Général", catMode: "existing" })}
+                            onClick={() => setEditingItem({ id: item.id, code: item.code || "", name: item.name, groupe: item.groupe || "Alimentaire", category: item.category, subcategory: item.subcategory || "", catMode: "existing" })}
                             className="text-stone-700 text-left flex-1 flex items-center gap-1 hover:text-amber-700"
                           >
                             <span>{item.code ? `${item.code} · ` : ""}{item.name}</span>
